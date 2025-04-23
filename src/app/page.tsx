@@ -1,103 +1,355 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from "react";
+import { Upload, FileText, Loader2, Check, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+
+// TypeScript interfaces
+interface ExtractedInfo {
+  customerName?: string;
+  customerID?: string;
+  dateOfBirth?: string;
+  address?: string;
+  idNumber?: string;
+  verificationStatus?: string;
+  passportNumber?: string;
+  nationality?: string;
+  issueDate?: string;
+  expiryDate?: string;
+}
+
+interface Document {
+  filename: string;
+  type: string;
+  extractedInfo: ExtractedInfo;
+}
+
+interface VerificationSummary {
+  identityVerified: boolean;
+  riskScore: string;
+  recommendedAction: string;
+}
+
+interface ExtractedData {
+  documents: Document[];
+  verificationSummary: VerificationSummary;
+}
+
+// Mock data for the extraction results
+const mockExtractedData: ExtractedData = {
+  documents: [
+    {
+      filename: "invoice.pdf",
+      type: "PDF",
+      extractedInfo: {
+        customerName: "John Smith",
+        customerID: "CS-12345",
+        dateOfBirth: "15/03/1985",
+        address: "123 Main Street, New York, NY 10001",
+        idNumber: "ID-987654321",
+        verificationStatus: "Verified",
+      },
+    },
+    {
+      filename: "passport.jpg",
+      type: "Image",
+      extractedInfo: {
+        customerName: "John Smith",
+        passportNumber: "P12345678",
+        nationality: "United States",
+        issueDate: "01/01/2020",
+        expiryDate: "01/01/2030",
+        verificationStatus: "Pending",
+      },
+    },
+  ],
+  verificationSummary: {
+    identityVerified: true,
+    riskScore: "Low",
+    recommendedAction: "Approve",
+  },
+};
+
+export default function DocumentUploadApp() {
+  const [files, setFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [progress, setProgress] = useState<number>(0);
+  const [extractedData, setExtractedData] = useState<ExtractedData | null>(
+    null
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      setFiles(Array.from(e.target.files));
+    }
+  };
+
+  // Handle file upload and processing
+  const handleUpload = () => {
+    if (files.length === 0) {
+      setError("Please select at least one file to upload");
+      return;
+    }
+
+    setError(null);
+    setIsUploading(true);
+
+    // Simulate upload completion
+    setTimeout(() => {
+      setIsUploading(false);
+      setIsProcessing(true);
+
+      // Simulate processing with progress updates
+      let currentProgress = 0;
+      const interval = setInterval(() => {
+        currentProgress += 20;
+        setProgress(currentProgress);
+
+        if (currentProgress >= 100) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setIsProcessing(false);
+            setExtractedData(mockExtractedData);
+          }, 500);
+        }
+      }, 1000);
+    }, 1500);
+  };
+
+  // Reset everything to upload more files
+  const handleReset = () => {
+    setFiles([]);
+    setExtractedData(null);
+    setProgress(0);
+  };
+
+  // Generate KYC report
+  const handleGenerateReport = () => {
+    alert("KYC Report generated and ready for download!");
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
+      <Card className="w-full max-w-3xl shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-lg">
+          <CardTitle className="text-2xl font-bold">
+            Document Verification
+          </CardTitle>
+          <CardDescription className="text-blue-100">
+            Upload your documents for KYC verification
+          </CardDescription>
+        </CardHeader>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <CardContent className="p-6">
+          {!isUploading && !isProcessing && !extractedData && (
+            <div className="space-y-6">
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer"
+                onClick={() => document.getElementById("file-upload")?.click()}
+              >
+                <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-lg font-medium text-gray-900">
+                  Upload Documents
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Drag and drop your files here or click to browse
+                </p>
+                <p className="mt-2 text-xs text-gray-500">
+                  Supports PDF, Word, JSON, JPG, PNG (Max 10MB each)
+                </p>
+                <input
+                  id="file-upload"
+                  name="file-upload"
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+
+              {files.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-medium text-gray-700 mb-2">
+                    Selected Files:
+                  </h4>
+                  <div className="space-y-2">
+                    {files.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center p-2 bg-gray-50 rounded"
+                      >
+                        <FileText className="h-5 w-5 text-blue-500 mr-2" />
+                        <span className="text-sm text-gray-600 flex-1">
+                          {file.name}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {(file.size / 1024).toFixed(0)} KB
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          {(isUploading || isProcessing) && (
+            <div className="py-12 space-y-6 text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600" />
+              <h3 className="text-lg font-medium text-gray-900">
+                {isUploading
+                  ? "Uploading your documents..."
+                  : "Processing your documents..."}
+              </h3>
+              <div className="w-full max-w-md mx-auto">
+                <Progress
+                  value={isUploading ? 100 : progress}
+                  className="h-2"
+                />
+                <p className="mt-2 text-sm text-gray-500">
+                  {isUploading
+                    ? "Transferring files..."
+                    : `Analyzing documents: ${progress}%`}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {extractedData && (
+            <div className="space-y-6">
+              <div className="flex items-center space-x-2 text-green-600">
+                <Check className="h-6 w-6" />
+                <h3 className="text-lg font-medium">
+                  Documents Processed Successfully
+                </h3>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-800">
+                  Extracted Information:
+                </h4>
+
+                {extractedData.documents.map((doc, idx) => (
+                  <div key={idx} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h5 className="font-medium">{doc.filename}</h5>
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        {doc.type}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                      {Object.entries(doc.extractedInfo).map(([key, value]) => (
+                        <div key={key} className="flex">
+                          <span className="font-medium text-gray-600 w-36">
+                            {key}:{" "}
+                          </span>
+                          <span className="text-gray-800">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="bg-gray-50 rounded-lg p-4 mt-4">
+                  <h4 className="font-medium text-gray-800 mb-2">
+                    Verification Summary
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                    {Object.entries(extractedData.verificationSummary).map(
+                      ([key, value]) => (
+                        <div key={key} className="flex">
+                          <span className="font-medium text-gray-600 w-36">
+                            {key}:{" "}
+                          </span>
+                          <span
+                            className={`${
+                              value === "Low" ||
+                              value === true ||
+                              value === "Approve"
+                                ? "text-green-600"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {typeof value === "boolean"
+                              ? value
+                                ? "Yes"
+                                : "No"
+                              : value}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+
+        <CardFooter className="flex justify-between p-6 bg-gray-50 rounded-b-lg">
+          {!extractedData ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                disabled={isUploading || isProcessing || files.length === 0}
+              >
+                Clear
+              </Button>
+              <Button
+                onClick={handleUpload}
+                disabled={isUploading || isProcessing || files.length === 0}
+              >
+                {isUploading || isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload & Process
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleReset}>
+                Upload New Documents
+              </Button>
+              <Button
+                onClick={handleGenerateReport}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Generate KYC Report
+              </Button>
+            </>
+          )}
+        </CardFooter>
+      </Card>
     </div>
   );
 }
