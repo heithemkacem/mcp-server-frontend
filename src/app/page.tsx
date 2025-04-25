@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Upload, FileText, Loader2, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -45,7 +45,7 @@ interface ExtractedData {
   verificationSummary: VerificationSummary;
 }
 
-// Mock data for the extraction results
+// Mock data for the extraction results (fallback if API fails)
 const mockExtractedData: ExtractedData = {
   documents: [
     {
@@ -89,44 +89,180 @@ export default function DocumentUploadApp() {
     null
   );
   const [error, setError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
 
-  // Handle file selection
+  // Handle file selection via input element
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) {
-      setFiles(Array.from(e.target.files));
+      // Add new files to existing files
+      const newFiles = Array.from(e.target.files);
+      addFiles(newFiles);
     }
   };
 
-  // Handle file upload and processing
-  const handleUpload = () => {
+  // Handle files from both drag-and-drop and file input
+  const addFiles = (newFiles: File[]) => {
+    // Check for duplicates by filename
+    const currentFilenames = files.map(f => f.name);
+    const uniqueNewFiles = newFiles.filter(file => !currentFilenames.includes(file.name));
+    
+    // Filter for only PDF files based on your backend requirement
+    const pdfFiles = uniqueNewFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+    
+    if (pdfFiles.length < uniqueNewFiles.length) {
+      setError("Only PDF files are supported. Some files were filtered out.");
+    }
+    
+    setFiles(prevFiles => [...prevFiles, ...pdfFiles]);
+
+    // Clear the file input so the same file can be added again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle drag events
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    if (e.dataTransfer.files?.length) {
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      addFiles(droppedFiles);
+    }
+  };
+
+  // Upload a single file to the server
+  const uploadSingleFile = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch('http://127.0.0.1:5000/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to upload ${file.name}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(data)
+    return file.name.replace(/\s+/g, ''); // Return the filename with spaces removed as the backend does
+  };
+
+  // Handle file uploads one by one
+  const handleUpload = async () => {
     if (files.length === 0) {
-      setError("Please select at least one file to upload");
+      setError("Please select at least one PDF file to upload");
       return;
     }
 
     setError(null);
     setIsUploading(true);
+    setProgress(0);
+    setUploadedFiles([]);
 
-    // Simulate upload completion
-    setTimeout(() => {
+    try {
+      // Upload each file one by one
+      const uploadedFileNames: string[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const filename = await uploadSingleFile(file);
+        uploadedFileNames.push(filename);
+        
+        // Update progress based on completed uploads
+        const singleFileProgress = Math.floor((i + 1) / files.length * 50); // First 50% for uploads
+        setProgress(singleFileProgress);
+      }
+      
       setIsUploading(false);
       setIsProcessing(true);
-
-      // Simulate processing with progress updates
-      let currentProgress = 0;
-      const interval = setInterval(() => {
-        currentProgress += 20;
-        setProgress(currentProgress);
-
-        if (currentProgress >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsProcessing(false);
-            setExtractedData(mockExtractedData);
-          }, 500);
+      setUploadedFiles(uploadedFileNames);
+      
+      // Now process the uploaded documents
+      const startProcessing = 50; // Start from 50% after upload is complete
+      const processInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(processInterval);
+            return prev;
+          }
+          return prev + 5;
+        });
+      }, 500);
+      
+      // Call the process_docs endpoint with the list of uploaded files
+      const processResponse = await fetch('http://127.0.0.1:5000/process_docs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          list_of_doc: uploadedFileNames,
+        }),
+      });
+      
+      if (!processResponse.ok) {
+        throw new Error(`Processing failed: ${processResponse.statusText}`);
+      }
+      
+      // Get the processing result
+      const processResult = await processResponse.json();
+      
+      // When processing is complete
+      clearInterval(processInterval);
+      setProgress(100);
+      setIsProcessing(false);
+      
+      // Format the data from the backend to match our ExtractedData interface
+      const formattedData: ExtractedData = {
+        documents: processResult.data.map((doc: any) => ({
+          filename: doc.filename || "Unknown",
+          type: "PDF",
+          extractedInfo: {
+            customerName: doc.customer_name || doc.name,
+            customerID: doc.customer_id,
+            dateOfBirth: doc.date_of_birth,
+            address: doc.address,
+            idNumber: doc.id_number,
+            verificationStatus: doc.verification_status || "Verified",
+            // Add other fields as needed based on your backend response
+          }
+        })),
+        verificationSummary: {
+          identityVerified: true, // Set based on actual data from backend
+          riskScore: processResult.risk_score || "Low",
+          recommendedAction: processResult.recommended_action || "Approve",
         }
-      }, 1000);
-    }, 1500);
+      };
+      
+      setExtractedData(formattedData);
+      
+    } catch (err) {
+      console.error("Upload or processing error:", err);
+      setError(err instanceof Error ? err.message : "Failed to upload or process files. Please try again.");
+      setIsUploading(false);
+      setIsProcessing(false);
+    }
+  };
+
+  // Remove a single file from the selection
+  const handleRemoveFile = (indexToRemove: number) => {
+    setFiles(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
   };
 
   // Reset everything to upload more files
@@ -134,6 +270,8 @@ export default function DocumentUploadApp() {
     setFiles([]);
     setExtractedData(null);
     setProgress(0);
+    setError(null);
+    setUploadedFiles([]);
   };
 
   // Generate KYC report
@@ -157,24 +295,31 @@ export default function DocumentUploadApp() {
           {!isUploading && !isProcessing && !extractedData && (
             <div className="space-y-6">
               <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer"
-                onClick={() => document.getElementById("file-upload")?.click()}
+                className={`border-2 border-dashed ${
+                  isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                } rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
-                <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                <Upload className={`mx-auto h-12 w-12 ${isDragOver ? 'text-blue-500' : 'text-gray-400'}`} />
                 <h3 className="mt-2 text-lg font-medium text-gray-900">
-                  Upload Documents
+                  {isDragOver ? 'Drop Files Here' : 'Upload Documents'}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
                   Drag and drop your files here or click to browse
                 </p>
                 <p className="mt-2 text-xs text-gray-500">
-                  Supports PDF, Word, JSON, JPG, PNG (Max 10MB each)
+                  Supports PDF files only (Max 10MB each)
                 </p>
                 <input
+                  ref={fileInputRef}
                   id="file-upload"
                   name="file-upload"
                   type="file"
                   multiple
+                  accept=".pdf"
                   className="hidden"
                   onChange={handleFileChange}
                 />
@@ -183,21 +328,32 @@ export default function DocumentUploadApp() {
               {files.length > 0 && (
                 <div className="mt-4">
                   <h4 className="font-medium text-gray-700 mb-2">
-                    Selected Files:
+                    Selected Files: {files.length}
                   </h4>
                   <div className="space-y-2">
                     {files.map((file, index) => (
                       <div
                         key={index}
-                        className="flex items-center p-2 bg-gray-50 rounded"
+                        className="flex items-center p-2 bg-gray-50 rounded group"
                       >
                         <FileText className="h-5 w-5 text-blue-500 mr-2" />
                         <span className="text-sm text-gray-600 flex-1">
                           {file.name}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 mr-2">
                           {(file.size / 1024).toFixed(0)} KB
                         </span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFile(index);
+                          }}
+                          className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -224,12 +380,12 @@ export default function DocumentUploadApp() {
               </h3>
               <div className="w-full max-w-md mx-auto">
                 <Progress
-                  value={isUploading ? 100 : progress}
+                  value={progress}
                   className="h-2"
                 />
                 <p className="mt-2 text-sm text-gray-500">
                   {isUploading
-                    ? "Transferring files..."
+                    ? `Uploading files: ${Math.min(progress * 2, 100)}%`
                     : `Analyzing documents: ${progress}%`}
                 </p>
               </div>
@@ -261,12 +417,14 @@ export default function DocumentUploadApp() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                       {Object.entries(doc.extractedInfo).map(([key, value]) => (
-                        <div key={key} className="flex">
-                          <span className="font-medium text-gray-600 w-36">
-                            {key}:{" "}
-                          </span>
-                          <span className="text-gray-800">{value}</span>
-                        </div>
+                        value && (
+                          <div key={key} className="flex">
+                            <span className="font-medium text-gray-600 w-36">
+                              {key}:{" "}
+                            </span>
+                            <span className="text-gray-800">{value}</span>
+                          </div>
+                        )
                       ))}
                     </div>
                   </div>
