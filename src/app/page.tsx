@@ -149,20 +149,29 @@ export default function DocumentUploadApp() {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await fetch('http://127.0.0.1:5000/upload', {
-      method: 'POST',
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to upload ${file.name}: ${response.statusText}`);
+    try {
+      const response = await fetch('http://127.0.0.1:5000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to upload ${file.name}: ${response.statusText}`);
+      }
+      
+      // Wait for the complete response and parse it
+      const data = await response.json();
+      console.log('Response data:', data);
+      
+      // Return the filename with spaces removed
+      return file.name.replace(/\s+/g, '');
+    } catch (error) {
+      console.error('Upload error:', error);
+      throw error;
     }
-    
-    const data = await response.json();
-    console.log(data)
-    return file.name.replace(/\s+/g, ''); // Return the filename with spaces removed as the backend does
   };
-
   // Handle file uploads one by one
   const handleUpload = async () => {
     if (files.length === 0) {
