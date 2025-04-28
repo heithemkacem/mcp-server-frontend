@@ -14,25 +14,49 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
-// TypeScript interfaces
-interface ExtractedInfo {
-  customerName?: string;
-  customerID?: string;
-  dateOfBirth?: string;
-  address?: string;
-  idNumber?: string;
-  verificationStatus?: string;
-  passportNumber?: string;
-  nationality?: string;
-  issueDate?: string;
-  expiryDate?: string;
-}
-
-interface Document {
+// TypeScript interfaces for different document types
+interface BaseDocument {
   filename: string;
   type: string;
-  extractedInfo: ExtractedInfo;
 }
+
+interface CompanyRegistrationDocument extends BaseDocument {
+  company_name?: string;
+  registration_number?: string;
+  incorporation_date?: string;
+}
+
+interface CertificateOfGoodStandingDocument extends BaseDocument {
+  company_name?: string;
+  registration_number?: string;
+  issued_date?: string;
+  issuing_authority?: string;
+  expiration_date?: string;
+  compliance_status?: Record<string, any>;
+  red_flags?: any[];
+}
+
+interface RegistrationNumberInfoDocument extends BaseDocument {
+  registration_number?: any[];
+  issuing_authority?: string[];
+  compliance_status?: Record<string, any>;
+  red_flags?: any[];
+}
+
+interface CompanyArticlesDocument extends BaseDocument {
+  "Company Purpose and Activities"?: string;
+  "Governance Structure"?: string;
+  "Share Capital Information"?: Record<string, any>;
+  "Board Composition Rules"?: string;
+  "Amendment History"?: string;
+}
+
+// Union type for all document types
+type Document = 
+  | CompanyRegistrationDocument 
+  | CertificateOfGoodStandingDocument 
+  | RegistrationNumberInfoDocument
+  | CompanyArticlesDocument;
 
 interface VerificationSummary {
   identityVerified: boolean;
@@ -45,49 +69,12 @@ interface ExtractedData {
   verificationSummary: VerificationSummary;
 }
 
-// Mock data for the extraction results (fallback if API fails)
-const mockExtractedData: ExtractedData = {
-  documents: [
-    {
-      filename: "invoice.pdf",
-      type: "PDF",
-      extractedInfo: {
-        customerName: "John Smith",
-        customerID: "CS-12345",
-        dateOfBirth: "15/03/1985",
-        address: "123 Main Street, New York, NY 10001",
-        idNumber: "ID-987654321",
-        verificationStatus: "Verified",
-      },
-    },
-    {
-      filename: "passport.jpg",
-      type: "Image",
-      extractedInfo: {
-        customerName: "John Smith",
-        passportNumber: "P12345678",
-        nationality: "United States",
-        issueDate: "01/01/2020",
-        expiryDate: "01/01/2030",
-        verificationStatus: "Pending",
-      },
-    },
-  ],
-  verificationSummary: {
-    identityVerified: true,
-    riskScore: "Low",
-    recommendedAction: "Approve",
-  },
-};
-
 export default function DocumentUploadApp() {
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
-  const [extractedData, setExtractedData] = useState<ExtractedData | null>(
-    null
-  );
+  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +159,7 @@ export default function DocumentUploadApp() {
       throw error;
     }
   };
+
   // Handle file uploads one by one
   const handleUpload = async () => {
     if (files.length === 0) {
@@ -237,25 +225,60 @@ export default function DocumentUploadApp() {
       setProgress(100);
       setIsProcessing(false);
       
-      // Format the data from the backend to match our ExtractedData interface
-      const formattedData: ExtractedData = {
-        documents: processResult.data.map((doc: any) => ({
-          filename: doc.filename || "Unknown",
-          type: "PDF",
-          extractedInfo: {
-            customerName: doc.customer_name || doc.name,
-            customerID: doc.customer_id,
-            dateOfBirth: doc.date_of_birth,
-            address: doc.address,
-            idNumber: doc.id_number,
-            verificationStatus: doc.verification_status || "Verified",
-            // Add other fields as needed based on your backend response
+      // Parse the JSON strings in the data array
+      const parsedDocuments = processResult.data.map((jsonString: string, index: number) => {
+        try {
+          // Some JSON strings might be incomplete or malformed
+          const cleanedJsonString = jsonString.replace(/\n/g, '').trim();
+          
+          // Try to fix incomplete JSON by adding closing braces if needed
+          let fixedJsonString = cleanedJsonString;
+          const openBraces = (fixedJsonString.match(/{/g) || []).length;
+          const closeBraces = (fixedJsonString.match(/}/g) || []).length;
+          if (openBraces > closeBraces) {
+            fixedJsonString += '}'.repeat(openBraces - closeBraces);
           }
-        })),
+          
+          let parsedData;
+          try {
+            parsedData = JSON.parse(fixedJsonString);
+          } catch (e) {
+            console.error("Failed to parse JSON:", fixedJsonString);
+            // Create a partial object with any data we can extract
+            parsedData = {
+              raw_data: cleanedJsonString
+            };
+          }
+          
+          // Determine the document type and create structured data
+          const doc: Document = {
+            filename: files[index]?.name || `Document ${index + 1}`,
+            type: "PDF",
+            ...parsedData
+          };
+          
+          return doc;
+        } catch (error) {
+          console.error("Error parsing document data:", error);
+          return {
+            filename: files[index]?.name || `Document ${index + 1}`,
+            type: "PDF",
+            error: "Failed to parse document data"
+          };
+        }
+      });
+      
+      // Create verification summary based on document analysis
+      const hasRedFlags = parsedDocuments.some(doc => 
+        Array.isArray((doc as any).red_flags) && (doc as any).red_flags.length > 0
+      );
+      
+      const formattedData: ExtractedData = {
+        documents: parsedDocuments,
         verificationSummary: {
-          identityVerified: true, // Set based on actual data from backend
-          riskScore: processResult.risk_score || "Low",
-          recommendedAction: processResult.recommended_action || "Approve",
+          identityVerified: !hasRedFlags,
+          riskScore: hasRedFlags ? "Medium" : "Low",
+          recommendedAction: hasRedFlags ? "Review" : "Approve",
         }
       };
       
@@ -286,6 +309,163 @@ export default function DocumentUploadApp() {
   // Generate KYC report
   const handleGenerateReport = () => {
     alert("KYC Report generated and ready for download!");
+  };
+
+  // Helper function to render document information based on its type
+  const renderDocumentInfo = (doc: Document) => {
+    // Check for company registration document
+    if ('company_name' in doc && 'registration_number' in doc && 'incorporation_date' in doc) {
+      return (
+        <>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Company Name: </span><span className="text-gray-800">{doc.company_name}</span></div>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Registration #: </span><span className="text-gray-800">{doc.registration_number}</span></div>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Incorporated: </span><span className="text-gray-800">{doc.incorporation_date}</span></div>
+        </>
+      );
+    }
+    
+    // Check for certificate of good standing
+    if ('issuing_authority' in doc && 'compliance_status' in doc && typeof doc.compliance_status === 'object') {
+      return (
+        <>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Company Name: </span><span className="text-gray-800">{doc.company_name}</span></div>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Registration #: </span><span className="text-gray-800">{doc.registration_number}</span></div>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Issued Date: </span><span className="text-gray-800">{doc.issued_date}</span></div>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Expires: </span><span className="text-gray-800">{doc.expiration_date}</span></div>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Authority: </span><span className="text-gray-800">{doc.issuing_authority}</span></div>
+          <div className="flex mt-2"><span className="font-medium text-gray-600 w-36">Compliance: </span>
+            <div className="flex flex-col text-gray-800">
+              {doc.compliance_status && Object.entries(doc.compliance_status).map(([key, value]) => (
+                <span key={key} className="text-sm mb-1">
+                  <span className="font-medium">{key.replace(/_/g, ' ')}</span>: {String(value)}
+                </span>
+              ))}
+            </div>
+          </div>
+          {Array.isArray(doc.red_flags) && doc.red_flags.length > 0 && (
+            <div className="flex mt-2">
+              <span className="font-medium text-red-600 w-36">Red Flags: </span>
+              <div className="flex flex-col text-red-600">
+                {doc.red_flags.map((flag, i) => (
+                  <span key={i} className="text-sm mb-1">
+                    {typeof flag === 'object' && flag.description ? flag.description : String(flag)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      );
+    }
+    
+    // Check for registration number info
+    if ('registration_number' in doc && Array.isArray(doc.registration_number)) {
+      return (
+        <>
+          <div className="flex"><span className="font-medium text-gray-600 w-36">Reg. Number Types: </span>
+            <div className="flex flex-col text-gray-800">
+              {doc.registration_number.map((reg, i) => (
+                <span key={i} className="text-sm mb-1">
+                  {reg.type}: {reg.description} ({reg.format})
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          {Array.isArray(doc.issuing_authority) && (
+            <div className="flex mt-2">
+              <span className="font-medium text-gray-600 w-36">Authorities: </span>
+              <div className="flex flex-col text-gray-800">
+                {doc.issuing_authority.map((auth, i) => (
+                  <span key={i} className="text-sm mb-1">{auth}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {Array.isArray(doc.red_flags) && doc.red_flags.length > 0 && (
+            <div className="flex mt-2">
+              <span className="font-medium text-red-600 w-36">Red Flags: </span>
+              <div className="flex flex-col text-red-600">
+                {doc.red_flags.map((flag, i) => (
+                  <span key={i} className="text-sm mb-1">
+                    {typeof flag === 'object' && flag.description ? flag.description : String(flag)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      );
+    }
+    
+    // Check for company articles
+    if ('Company Purpose and Activities' in doc || 'Share Capital Information' in doc) {
+      return (
+        <>
+          {doc['Company Purpose and Activities'] && (
+            <div className="flex"><span className="font-medium text-gray-600 w-36">Company Purpose: </span>
+              <span className="text-gray-800">{doc['Company Purpose and Activities']}</span>
+            </div>
+          )}
+          
+          {doc['Governance Structure'] && (
+            <div className="flex"><span className="font-medium text-gray-600 w-36">Governance: </span>
+              <span className="text-gray-800">{doc['Governance Structure']}</span>
+            </div>
+          )}
+          
+          {doc['Share Capital Information'] && (
+            <div className="flex mt-2"><span className="font-medium text-gray-600 w-36">Share Capital: </span>
+              <div className="flex flex-col text-gray-800">
+                {Object.entries(doc['Share Capital Information']).map(([key, value]) => (
+                  <span key={key} className="text-sm mb-1">
+                    <span className="font-medium">{key}:</span> {
+                      typeof value === 'object' 
+                        ? JSON.stringify(value).substring(0, 100) + '...' 
+                        : String(value)
+                    }
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {doc['Amendment History'] && (
+            <div className="flex"><span className="font-medium text-gray-600 w-36">History: </span>
+              <span className="text-gray-800">{doc['Amendment History']}</span>
+            </div>
+          )}
+        </>
+      );
+    }
+    
+    // Fallback for other document types or malformed data
+    return (
+      <div className="space-y-2">
+        {Object.entries(doc).map(([key, value]) => {
+          // Skip filename and type as they're already displayed in the header
+          if (key === 'filename' || key === 'type') return null;
+          
+          // Handle different value types
+          if (typeof value === 'object' && value !== null) {
+            return (
+              <div key={key} className="flex">
+                <span className="font-medium text-gray-600 w-36">{key}: </span>
+                <span className="text-gray-800 text-sm italic">Complex data (expand for details)</span>
+              </div>
+            );
+          } else {
+            return (
+              <div key={key} className="flex">
+                <span className="font-medium text-gray-600 w-36">{key}: </span>
+                <span className="text-gray-800">{String(value)}</span>
+              </div>
+            );
+          }
+        })}
+      </div>
+    );
   };
 
   return (
@@ -412,43 +592,34 @@ export default function DocumentUploadApp() {
 
               <div className="space-y-4">
                 <h4 className="font-medium text-gray-800">
-                  Extracted Information:
+                  Document Analysis:
                 </h4>
 
                 {extractedData.documents.map((doc, idx) => (
                   <div key={idx} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="flex justify-between items-center mb-4">
                       <h5 className="font-medium">{doc.filename}</h5>
                       <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                         {doc.type}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                      {Object.entries(doc.extractedInfo).map(([key, value]) => (
-                        value && (
-                          <div key={key} className="flex">
-                            <span className="font-medium text-gray-600 w-36">
-                              {key}:{" "}
-                            </span>
-                            <span className="text-gray-800">{value}</span>
-                          </div>
-                        )
-                      ))}
+                    <div className="grid grid-cols-1 gap-3 text-sm">
+                      {renderDocumentInfo(doc)}
                     </div>
                   </div>
                 ))}
 
-                <div className="bg-gray-50 rounded-lg p-4 mt-4">
-                  <h4 className="font-medium text-gray-800 mb-2">
+                <div className="bg-gray-50 rounded-lg p-4 mt-6">
+                  <h4 className="font-medium text-gray-800 mb-3">
                     Verification Summary
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {Object.entries(extractedData.verificationSummary).map(
                       ([key, value]) => (
                         <div key={key} className="flex">
                           <span className="font-medium text-gray-600 w-36">
-                            {key}:{" "}
+                            {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:{" "}
                           </span>
                           <span
                             className={`${
@@ -456,8 +627,12 @@ export default function DocumentUploadApp() {
                               value === true ||
                               value === "Approve"
                                 ? "text-green-600"
+                                : value === "Medium" || value === "Review"
+                                ? "text-amber-600"
+                                : value === "High" || value === "Reject"
+                                ? "text-red-600"
                                 : "text-gray-800"
-                            }`}
+                            } font-medium`}
                           >
                             {typeof value === "boolean"
                               ? value
