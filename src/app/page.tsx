@@ -15,10 +15,14 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 // Generic Document interface
+interface DocumentData {
+  [key: string]: string | number | boolean | DocumentData | null;
+}
+
 interface Document {
   filename: string;
   type: string;
-  data: any; // Dynamic JSON data
+  data: DocumentData;
 }
 
 interface VerificationSummary {
@@ -34,7 +38,25 @@ interface ExtractedData {
 
 interface KYCResult {
   message: string;
-  kyc_data: any;
+  kyc_data: {
+    documentData: Document[] | Document;
+    verificationSummary: VerificationSummary;
+    FraudDetection?: {
+      FraudAnalysis: string;
+      FraudRiskScore: number;
+      finalResponse: string;
+    };
+    RiskAssessment?: {
+      RiskAnalysis: string;
+      RiskScore: number;
+      finalResponse: string;
+    };
+    ComplianceCheck?: {
+      ComplianceAnalysis: string;
+      ComplianceStatus: string;
+      finalResponse: string;
+    };
+  };
 }
 
 export default function DocumentUploadApp() {
@@ -216,11 +238,11 @@ export default function DocumentUploadApp() {
         }
       );
 
-      // Simplified verification summary (no red_flags check since interfaces are removed)
+      // Simplified verification summary
       const formattedData: ExtractedData = {
         documents: parsedDocuments,
         verificationSummary: {
-          identityVerified: true, // Default to true since no specific checks
+          identityVerified: true,
           riskScore: "Low",
           recommendedAction: "Approve",
         },
@@ -252,16 +274,14 @@ export default function DocumentUploadApp() {
     setProgress(0);
 
     try {
-      // Create a data object that combines all documents' data
       const combinedData = {
-        documentData: extractedData.documents.map(doc => ({
+        documentData: extractedData.documents.map((doc) => ({
           filename: doc.filename,
-          data: doc.data
+          data: doc.data,
         })),
-        verificationSummary: extractedData.verificationSummary
+        verificationSummary: extractedData.verificationSummary,
       };
 
-      // Update progress periodically
       const processInterval = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 95) {
@@ -272,7 +292,6 @@ export default function DocumentUploadApp() {
         });
       }, 500);
 
-      // Call the KYC processing endpoint
       const kycResponse = await fetch("http://127.0.0.1:5000/process_kyc", {
         method: "POST",
         headers: {
@@ -286,7 +305,9 @@ export default function DocumentUploadApp() {
 
       if (!kycResponse.ok) {
         const errorData = await kycResponse.json();
-        throw new Error(`KYC Processing failed: ${errorData.message || kycResponse.statusText}`);
+        throw new Error(
+          `KYC Processing failed: ${errorData.message || kycResponse.statusText}`
+        );
       }
 
       const kycData = await kycResponse.json();
@@ -332,8 +353,8 @@ export default function DocumentUploadApp() {
   };
 
   // Toggle JSON visibility for a document
-  const toggleJson = (index: number) => {
-    setShowJson((prev :any) => ({ ...prev, [index]: !prev[index] }));
+  const toggleJson = (index: number | string) => {
+    setShowJson((prev: any) => ({ ...prev, [index]: !prev[index] }));
   };
 
   // Render raw JSON for a document
@@ -358,141 +379,320 @@ export default function DocumentUploadApp() {
     );
   };
 
-  // Render the KYC result data
+  // Utility function to render nested data
+  const renderNestedData = (data: any, prefix: string = ""): JSX.Element[] => {
+    if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      return [
+        <div key={prefix} className="flex">
+          <span className="font-medium text-gray-600 w-40 capitalize">
+            {prefix.replace(/_/g, " ")}:
+          </span>
+          <span className="text-gray-800">
+            {typeof data === "number"
+              ? `₹${data.toLocaleString()}`
+              : typeof data === "boolean"
+              ? data
+                ? "Yes"
+                : "No"
+              : data || "N/A"}
+          </span>
+        </div>,
+      ];
+    }
+
+    return Object.entries(data).flatMap(([key, value]) => {
+      const newKey = prefix ? `${prefix}.${key}` : key;
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+        return renderNestedData(value, newKey);
+      }
+      return (
+        <div key={newKey} className="flex">
+          <span className="font-medium text-gray-600 w-40 capitalize">
+            {newKey.replace(/_/g, " ")}:
+          </span>
+          <span className="text-gray-800">
+            {typeof value === "number"
+              ? `₹${value.toLocaleString()}`
+              : typeof value === "boolean"
+              ? value
+                ? "Yes"
+                : "No"
+              : value || "N/A"}
+          </span>
+        </div>
+      );
+    });
+  };
+
+  // Render the KYC result data with enhanced UI
   const renderKycResult = () => {
-    if (!kycResult) return null;
+    if (!kycResult) return null;  // Fixed: removed "admin" prefix from kycResult
+
+    // Normalize documentData to always be an array
+    const documentData = Array.isArray(kycResult?.kyc_data.documentData)
+      ? kycResult?.kyc_data.documentData
+      : kycResult?.kyc_data.documentData
+      ? [kycResult?.kyc_data.documentData]
+      : [];
 
     return (
-      <div className="mt-6 space-y-4">
-        <div className="flex items-center space-x-2 text-green-600">
-          <Check className="h-6 w-6" />
-          <h3 className="text-lg font-medium">KYC Processing Complete</h3>
+      <div className="mt-8 space-y-6">
+        <div className="flex items-center space-x-3">
+          <Check className="h-8 w-8 text-green-500" />
+          <h2 className="text-2xl font-semibold text-gray-800">
+            KYC Verification Complete
+          </h2>
         </div>
 
-        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-          <h4 className="font-medium text-blue-800 mb-3">
-            KYC Analysis Results
-          </h4>
-          <div className="space-y-3">
-            <div className="flex">
-              <span className="font-medium text-gray-600 w-36">
-                Status:
-              </span>
-              <span className={`font-medium ${
-                kycResult.message.includes("successful") 
-                  ? "text-green-600" 
-                  : "text-red-600"
-              }`}>
-                {kycResult.message}
-              </span>
-            </div>
-
-            {/* Display Fraud Detection results if available */}
-            {kycResult.kyc_data?.FraudDetection && (
-              <div className="border-t pt-3">
-                <h5 className="font-medium text-gray-700 mb-2">Fraud Detection</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                  <div className="flex">
-                    <span className="font-medium text-gray-600 w-36">Result:</span>
-                    <span className={`font-medium ${
-                      kycResult.kyc_data.FraudDetection.finalResponse === "SUCCESS" 
-                        ? "text-green-600" 
-                        : "text-red-600"
-                    }`}>
-                      {kycResult.kyc_data.FraudDetection.finalResponse}
-                    </span>
-                  </div>
-                  {kycResult.kyc_data.FraudDetection.reasoning && (
-                    <div className="col-span-2">
-                      <span className="font-medium text-gray-600">Reasoning:</span>
-                      <p className="mt-1 text-gray-700">{kycResult.kyc_data.FraudDetection.reasoning}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Display Risk Assessment results if available */}
-            {kycResult.kyc_data?.RiskAssessment && (
-              <div className="border-t pt-3">
-                <h5 className="font-medium text-gray-700 mb-2">Risk Assessment</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                  <div className="flex">
-                    <span className="font-medium text-gray-600 w-36">Result:</span>
-                    <span className={`font-medium ${
-                      kycResult.kyc_data.RiskAssessment.finalResponse === "SUCCESS" 
-                        ? "text-green-600" 
-                        : "text-red-600"
-                    }`}>
-                      {kycResult.kyc_data.RiskAssessment.finalResponse}
-                    </span>
-                  </div>
-                  {kycResult.kyc_data.RiskAssessment.riskScore && (
-                    <div className="flex">
-                      <span className="font-medium text-gray-600 w-36">Risk Score:</span>
-                      <span className={`font-medium ${
-                        parseInt(kycResult.kyc_data.RiskAssessment.riskScore) < 50 
-                          ? "text-green-600" 
-                          : parseInt(kycResult.kyc_data.RiskAssessment.riskScore) < 75
-                            ? "text-yellow-600"
-                            : "text-red-600"
-                      }`}>
-                        {kycResult.kyc_data.RiskAssessment.riskScore}
-                      </span>
-                    </div>
-                  )}
-                  {kycResult.kyc_data.RiskAssessment.reasoning && (
-                    <div className="col-span-2">
-                      <span className="font-medium text-gray-600">Reasoning:</span>
-                      <p className="mt-1 text-gray-700">{kycResult.kyc_data.RiskAssessment.reasoning}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Display Compliance Check results if available */}
-            {kycResult.kyc_data?.ComplianceCheck && (
-              <div className="border-t pt-3">
-                <h5 className="font-medium text-gray-700 mb-2">Compliance Check</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                  <div className="flex">
-                    <span className="font-medium text-gray-600 w-36">Result:</span>
-                    <span className={`font-medium ${
-                      kycResult.kyc_data.ComplianceCheck.finalResponse === "SUCCESS" 
-                        ? "text-green-600" 
-                        : "text-red-600"
-                    }`}>
-                      {kycResult.kyc_data.ComplianceCheck.finalResponse}
-                    </span>
-                  </div>
-                  {kycResult.kyc_data.ComplianceCheck.reasoning && (
-                    <div className="col-span-2">
-                      <span className="font-medium text-gray-600">Reasoning:</span>
-                      <p className="mt-1 text-gray-700">{kycResult.kyc_data.ComplianceCheck.reasoning}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Show raw KYC data toggle button */}
-            <div className="mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowJson((prev:any) => ({ ...prev, kycData: !prev.kycData }))}
-                className="mb-2"
+        {/* Overview Card */}
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-none shadow-md">
+          <CardHeader>
+            <CardTitle className="text-xl text-blue-800">
+              Verification Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-600">Status</p>
+              <p
+                className={`text-lg font-semibold ${
+                  kycResult?.message.includes("successful")
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}
               >
-                {showJson.kycData ? "Hide Raw KYC Data" : "Show Raw KYC Data"}
-              </Button>
-              {showJson.kycData && (
-                <pre className="bg-gray-900 text-white rounded-lg p-4 overflow-x-auto text-sm font-mono">
-                  <code>{JSON.stringify(kycResult.kyc_data, null, 2)}</code>
-                </pre>
-              )}
+                {kycResult?.message}
+              </p>
             </div>
-          </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-600">Identity Verified</p>
+              <p
+                className={`text-lg font-semibold ${
+                  kycResult?.kyc_data.verificationSummary.identityVerified
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}
+              >
+                {kycResult?.kyc_data.verificationSummary.identityVerified
+                  ? "Yes"
+                  : "No"}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-600">Recommended Action</p>
+              <p
+                className={`text-lg font-semibold ${
+                  kycResult?.kyc_data.verificationSummary.recommendedAction ===
+                  "Approve"
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}
+              >
+                {kycResult?.kyc_data.verificationSummary.recommendedAction}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Detailed Analysis Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Fraud Detection */}
+          {kycResult?.kyc_data?.FraudDetection && (
+            <Card className="border-none shadow-md">
+              <CardHeader className="bg-green-50">
+                <CardTitle className="text-lg text-green-800">
+                  Fraud Detection
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Result:
+                  </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      kycResult?.kyc_data.FraudDetection.finalResponse === "SUCCESS"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {kycResult?.kyc_data.FraudDetection.finalResponse}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Fraud Risk Score:
+                  </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      kycResult?.kyc_data.FraudDetection.FraudRiskScore < 50
+                        ? "text-green-600"
+                        : kycResult?.kyc_data.FraudDetection.FraudRiskScore < 75
+                        ? "text-yellow-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {kycResult?.kyc_data.FraudDetection.FraudRiskScore}/100
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-2">
+                    Analysis:
+                  </p>
+                  <p className="text-sm text-gray-700 whitespace-pre-line">
+                    {kycResult?.kyc_data.FraudDetection.FraudAnalysis}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Risk Assessment */}
+          {kycResult?.kyc_data?.RiskAssessment && (
+            <Card className="border-none shadow-md">
+              <CardHeader className="bg-yellow-50">
+                <CardTitle className="text-lg text-yellow-800">
+                  Risk Assessment
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Result:
+                  </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      kycResult?.kyc_data.RiskAssessment.finalResponse === "SUCCESS"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {kycResult?.kyc_data.RiskAssessment.finalResponse}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Risk Score:
+                  </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      kycResult?.kyc_data.RiskAssessment.RiskScore < 50
+                        ? "text-green-600"
+                        : kycResult?.kyc_data.RiskAssessment.RiskScore < 75
+                        ? "text-yellow-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {kycResult?.kyc_data.RiskAssessment.RiskScore}/100
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-2">
+                    Analysis:
+                  </p>
+                  <p className="text-sm text-gray-700 whitespace-pre-line">
+                    {kycResult?.kyc_data.RiskAssessment.RiskAnalysis}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Compliance Check */}
+          {kycResult?.kyc_data?.ComplianceCheck && (
+            <Card className="border-none shadow-md">
+              <CardHeader className="bg-blue-50">
+                <CardTitle className="text-lg text-blue-800">
+                  Compliance Check
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Result:
+                  </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      kycResult?.kyc_data.ComplianceCheck.finalResponse ===
+                      "SUCCESS"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {kycResult?.kyc_data.ComplianceCheck.finalResponse}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">
+                    Compliance Status:
+                  </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      kycResult?.kyc_data.ComplianceCheck.ComplianceStatus ===
+                      "Compliant"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {kycResult?.kyc_data.ComplianceCheck.ComplianceStatus}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-2">
+                    Analysis:
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    {kycResult?.kyc_data.ComplianceCheck.ComplianceAnalysis}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Document Data */}
+        {documentData.length > 0 && (
+          <Card className="border-none shadow-md">
+            <CardHeader>
+              <CardTitle className="text-xl text-gray-800">
+                Document Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {documentData.map((doc: Document, idx: number) => (
+                <div key={idx} className="border-b pb-4 last:border-b-0">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="text-lg font-medium text-gray-800">
+                      {doc.filename}
+                    </h4>
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                      PDF
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    {renderNestedData(doc.data)}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Raw KYC Data Toggle */}
+        <div className="mt-6">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toggleJson("kycData")}
+            className="mb-4"
+          >
+            {showJson.kycData ? "Hide Raw KYC Data" : "Show Raw KYC Data"}
+          </Button>
+          {showJson.kycData && (
+            <pre className="bg-gray-900 text-white rounded-lg p-4 overflow-x-auto text-sm font-mono">
+              <code>{JSON.stringify(kycResult?.kyc_data, null, 2)}</code>
+            </pre>
+          )}
         </div>
       </div>
     );
@@ -513,42 +713,44 @@ export default function DocumentUploadApp() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
-      <Card className="w-full max-w-3xl shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-lg">
-          <CardTitle className="text-2xl font-bold">
-            KYC Application
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-6">
+      <Card className="w-full max-w-4xl shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
+          <CardTitle className="text-3xl font-bold">
+            KYC Verification Portal
           </CardTitle>
           <CardDescription className="text-blue-100">
-            Upload your documents for KYC verification
+            Securely upload and verify your documents
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="p-6">
+        <CardContent className="p-8">
           {!isUploading && !isProcessing && !isProcessingKyc && !extractedData && !kycResult && (
-            <div className="space-y-6">
+            <div className="space-y-8">
               <div
-                className={`border-2 border-dashed ${
-                  isDragOver ? "border-blue-500 bg-blue-50" : "border-gray-300"
-                } rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer`}
+                className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-300 ${
+                  isDragOver
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 hover:border-blue-500"
+                } cursor-pointer`}
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
                 <Upload
-                  className={`mx-auto h-12 w-12 ${
+                  className={`mx-auto h-16 w-16 ${
                     isDragOver ? "text-blue-500" : "text-gray-400"
-                  }`}
+                  } transition-colors`}
                 />
-                <h3 className="mt-2 text-lg font-medium text-gray-900">
+                <h3 className="mt-4 text-xl font-semibold text-gray-900">
                   {isDragOver ? "Drop Files Here" : "Upload Documents"}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Drag and drop your files here or click to browse
+                <p className="mt-2 text-sm text-gray-500">
+                  Drag and drop your PDF files or click to browse
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
-                  Supports PDF files only (Max 10MB each)
+                <p className="mt-2 text-xs text-gray-400">
+                  Only PDF files supported (Max 10MB each)
                 </p>
                 <input
                   ref={fileInputRef}
@@ -563,33 +765,30 @@ export default function DocumentUploadApp() {
               </div>
 
               {files.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="font-medium text-gray-700 mb-2">
-                    Selected Files: {files.length}
+                <div className="mt-6">
+                  <h4 className="font-semibold text-gray-700 mb-4">
+                    Selected Files ({files.length})
                   </h4>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {files.map((file, index) => (
                       <div
                         key={index}
-                        className="flex items-center p-2 bg-gray-50 rounded group"
+                        className="flex items-center p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition"
                       >
-                        <FileText className="h-5 w-5 text-blue-500 mr-2" />
+                        <FileText className="h-6 w-6 text-blue-500 mr-3" />
                         <span className="text-sm text-gray-600 flex-1">
                           {file.name}
                         </span>
-                        <span className="text-xs text-gray-500 mr-2">
+                        <span className="text-xs text-gray-500 mr-3">
                           {(file.size / 1024).toFixed(0)} KB
                         </span>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveFile(index);
-                          }}
+                          onClick={() => handleRemoveFile(index)}
                           className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
+                            className="h-5 w-5"
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
@@ -607,8 +806,8 @@ export default function DocumentUploadApp() {
               )}
 
               {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
+                <Alert variant="destructive" className="mt-4">
+                  <AlertCircle className="h-5 w-5" />
                   <AlertTitle>Error</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
@@ -616,15 +815,17 @@ export default function DocumentUploadApp() {
             </div>
           )}
 
+        
+
           {(isUploading || isProcessing || isProcessingKyc) && (
-            <div className="py-12 space-y-6 text-center">
-              <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600" />
-              <h3 className="text-lg font-medium text-gray-900">
+            <div className="py-16 space-y-8 text-center">
+              <Loader2 className="h-16 w-16 animate-spin mx-auto text-blue-600" />
+              <h3 className="text-xl font-semibold text-gray-900">
                 {getProcessingTitle()}
               </h3>
               <div className="w-full max-w-md mx-auto">
-                <Progress value={progress} className="h-2" />
-                <p className="mt-2 text-sm text-gray-500">
+                <Progress value={progress} className="h-3 rounded-full" />
+                <p className="mt-3 text-sm text-gray-500">
                   {isUploading
                     ? `Uploading files: ${Math.min(progress * 2, 100)}%`
                     : isProcessingKyc
@@ -636,91 +837,97 @@ export default function DocumentUploadApp() {
           )}
 
           {extractedData && !kycResult && !isProcessingKyc && (
-            <div className="space-y-6">
-              <div className="flex items-center space-x-2 text-green-600">
-                <Check className="h-6 w-6" />
-                <h3 className="text-lg font-medium">
+            <div className="space-y-8">
+              <div className="flex items-center space-x-3 text-green-600">
+                <Check className="h-8 w-8" />
+                <h3 className="text-2xl font-semibold">
                   Documents Processed Successfully
                 </h3>
               </div>
 
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-800">
-                  Document Analysis:
+              <div className="space-y-6">
+                <h4 className="font-semibold text-gray-800 text-lg">
+                  Document Analysis
                 </h4>
 
                 {extractedData.documents.map((doc, idx) => (
-                  <div key={idx} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <h5 className="font-medium">{doc.filename}</h5>
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        {doc.type}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 text-sm">
-                      {renderRawJson(doc, idx)}
-                    </div>
-                  </div>
+                  <Card key={idx} className="border-none shadow-md">
+                    <CardHeader>
+                      <div className="flex justify-between items-center">
+                        <h5 className="font-semibold text-gray-800">
+                          {doc.filename}
+                        </h5>
+                        <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                          {doc.type}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent>{renderRawJson(doc, idx)}</CardContent>
+                  </Card>
                 ))}
 
-                <div className="bg-gray-50 rounded-lg p-4 mt-6">
-                  <h4 className="font-medium text-gray-800 mb-3">
-                    Initial Verification Summary
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {Object.entries(extractedData.verificationSummary).map(
-                      ([key, value]) => (
-                        <div key={key} className="flex">
-                          <span className="font-medium text-gray-600 w-36">
-                            {key
-                              .replace(/([A-Z])/g, " $1")
-                              .replace(/^./, (str) => str.toUpperCase())}:{" "}
-                          </span>
-                          <span
-                            className={`${
-                              value === "Low" ||
-                              value === true ||
-                              value === "Approve"
-                                ? "text-green-600"
-                                : value === "Medium" || value === "Review"
-                                ? "text-amber-600"
-                                : value === "High" || value === "Reject"
-                                ? "text-red-600"
-                                : "text-gray-800"
-                            } font-medium`}
-                          >
-                            {typeof value === "boolean"
-                              ? value
-                                ? "Yes"
-                                : "No"
-                              : value}
-                          </span>
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
+                <Card className="bg-gray-50">
+                  <CardHeader>
+                    <CardTitle className="text-lg text-gray-800">
+                      Initial Verification Summary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      {Object.entries(extractedData.verificationSummary).map(
+                        ([key, value]) => (
+                          <div key={key} className="flex">
+                            <span className="font-medium text-gray-600 w-40 capitalize">
+                              {key
+                                .replace(/([A-Z])/g, " $1")
+                                .replace(/^./, (str) => str.toUpperCase())}:
+                            </span>
+                            <span
+                              className={`font-semibold ${
+                                value === "Low" ||
+                                value === true ||
+                                value === "Approve"
+                                  ? "text-green-600"
+                                  : value === "Medium" || value === "Review"
+                                  ? "text-amber-600"
+                                  : value === "High" || value === "Reject"
+                                  ? "text-red-600"
+                                  : "text-gray-800"
+                              }`}
+                            >
+                              {typeof value === "boolean"
+                                ? value
+                                  ? "Yes"
+                                  : "No"
+                                : value}
+                            </span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <Alert className="bg-blue-50 border-blue-100">
-                  <FileCheck className="h-4 w-4 text-blue-500" />
-                  <AlertTitle className="text-blue-800">Ready for KYC Processing</AlertTitle>
+                <Alert className="bg-blue-50 border-blue-200">
+                  <FileCheck className="h-5 w-5 text-blue-500" />
+                  <AlertTitle className="text-blue-800">
+                    Ready for KYC Processing
+                  </AlertTitle>
                   <AlertDescription className="text-blue-700">
-                    Documents have been extracted successfully. Click "Process KYC" to perform 
-                    fraud detection, risk assessment, and compliance checks.
+                    Documents have been extracted successfully. Click "Process KYC"
+                    to perform fraud detection, risk assessment, and compliance
+                    checks.
                   </AlertDescription>
                 </Alert>
               </div>
             </div>
           )}
 
-          {/* Show KYC results if available */}
           {kycResult && renderKycResult()}
 
-          {/* Show any errors */}
           {error && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertCircle className="h-4 w-4" />
+            <Alert variant="destructive" className="mt-6">
+              <AlertCircle className="h-5 w-5" />
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
@@ -740,6 +947,7 @@ export default function DocumentUploadApp() {
               <Button
                 onClick={handleUpload}
                 disabled={isUploading || isProcessing || files.length === 0}
+                className="bg-blue-600 hover:bg-blue-700"
               >
                 {isUploading || isProcessing ? (
                   <>
@@ -793,8 +1001,6 @@ export default function DocumentUploadApp() {
         </CardFooter>
       </Card>
 
-   
-      {/* CSS for JSON formatting */}
       <style jsx>{`
         pre {
           background: #1a202c;
