@@ -669,17 +669,7 @@ export default function DocumentUploadApp() {
                       PDF
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {renderNestedData(doc.data)}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Raw KYC Data Toggle */}
-        <div className="mt-6">
+                  <div className="mt-6">
           <Button
             variant="outline"
             size="sm"
@@ -694,6 +684,14 @@ export default function DocumentUploadApp() {
             </pre>
           )}
         </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Raw KYC Data Toggle */}
+        
       </div>
     );
   };
@@ -990,12 +988,12 @@ export default function DocumentUploadApp() {
               <Button variant="outline" onClick={handleReset}>
                 Upload New Documents
               </Button>
-              <Button
+              {/* <Button
                 onClick={handleGenerateReport}
                 className="bg-green-600 hover:bg-green-700"
               >
                 Generate KYC Report
-              </Button>
+              </Button> */}
             </>
           )}
         </CardFooter>
