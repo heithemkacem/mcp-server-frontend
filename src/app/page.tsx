@@ -1,7 +1,13 @@
 "use client";
-
-import { useState, useRef } from "react";
-import { Upload, FileText, Loader2, Check, AlertCircle, FileCheck } from "lucide-react";
+import type { JSX } from "react";
+import {
+  Upload,
+  FileText,
+  Loader2,
+  Check,
+  AlertCircle,
+  FileCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -64,7 +70,9 @@ export default function DocumentUploadApp() {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
-  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
+  const [extractedData, setExtractedData] = useState<ExtractedData | null>(
+    null
+  );
   const [kycResult, setKycResult] = useState<KYCResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
@@ -136,7 +144,9 @@ export default function DocumentUploadApp() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to upload ${file.name}: ${response.statusText}`);
+        throw new Error(
+          `Failed to upload ${file.name}: ${response.statusText}`
+        );
       }
 
       const data = await response.json();
@@ -306,7 +316,9 @@ export default function DocumentUploadApp() {
       if (!kycResponse.ok) {
         const errorData = await kycResponse.json();
         throw new Error(
-          `KYC Processing failed: ${errorData.message || kycResponse.statusText}`
+          `KYC Processing failed: ${
+            errorData.message || kycResponse.statusText
+          }`
         );
       }
 
@@ -402,7 +414,11 @@ export default function DocumentUploadApp() {
 
     return Object.entries(data).flatMap(([key, value]) => {
       const newKey = prefix ? `${prefix}.${key}` : key;
-      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
         return renderNestedData(value, newKey);
       }
       return (
@@ -426,7 +442,7 @@ export default function DocumentUploadApp() {
 
   // Render the KYC result data with enhanced UI
   const renderKycResult = () => {
-    if (!kycResult) return null;  // Fixed: removed "admin" prefix from kycResult
+    if (!kycResult) return null; // Fixed: removed "admin" prefix from kycResult
 
     // Normalize documentData to always be an array
     const documentData = Array.isArray(kycResult?.kyc_data.documentData)
@@ -465,7 +481,9 @@ export default function DocumentUploadApp() {
               </p>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-600">Identity Verified</p>
+              <p className="text-sm font-medium text-gray-600">
+                Identity Verified
+              </p>
               <p
                 className={`text-lg font-semibold ${
                   kycResult?.kyc_data.verificationSummary.identityVerified
@@ -479,7 +497,9 @@ export default function DocumentUploadApp() {
               </p>
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-600">Recommended Action</p>
+              <p className="text-sm font-medium text-gray-600">
+                Recommended Action
+              </p>
               <p
                 className={`text-lg font-semibold ${
                   kycResult?.kyc_data.verificationSummary.recommendedAction ===
@@ -511,7 +531,8 @@ export default function DocumentUploadApp() {
                   </span>
                   <span
                     className={`text-sm font-semibold ${
-                      kycResult?.kyc_data.FraudDetection.finalResponse === "SUCCESS"
+                      kycResult?.kyc_data.FraudDetection.finalResponse ===
+                      "SUCCESS"
                         ? "text-green-600"
                         : "text-red-600"
                     }`}
@@ -562,7 +583,8 @@ export default function DocumentUploadApp() {
                   </span>
                   <span
                     className={`text-sm font-semibold ${
-                      kycResult?.kyc_data.RiskAssessment.finalResponse === "SUCCESS"
+                      kycResult?.kyc_data.RiskAssessment.finalResponse ===
+                      "SUCCESS"
                         ? "text-green-600"
                         : "text-red-600"
                     }`}
@@ -670,20 +692,24 @@ export default function DocumentUploadApp() {
                     </span>
                   </div>
                   <div className="mt-6">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toggleJson("kycData")}
-            className="mb-4"
-          >
-            {showJson.kycData ? "Hide Raw KYC Data" : "Show Raw KYC Data"}
-          </Button>
-          {showJson.kycData && (
-            <pre className="bg-gray-900 text-white rounded-lg p-4 overflow-x-auto text-sm font-mono">
-              <code>{JSON.stringify(kycResult?.kyc_data, null, 2)}</code>
-            </pre>
-          )}
-        </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleJson("kycData")}
+                      className="mb-4"
+                    >
+                      {showJson.kycData
+                        ? "Hide Raw KYC Data"
+                        : "Show Raw KYC Data"}
+                    </Button>
+                    {showJson.kycData && (
+                      <pre className="bg-gray-900 text-white rounded-lg p-4 overflow-x-auto text-sm font-mono">
+                        <code>
+                          {JSON.stringify(kycResult?.kyc_data, null, 2)}
+                        </code>
+                      </pre>
+                    )}
+                  </div>
                 </div>
               ))}
             </CardContent>
@@ -691,7 +717,6 @@ export default function DocumentUploadApp() {
         )}
 
         {/* Raw KYC Data Toggle */}
-        
       </div>
     );
   };
@@ -723,97 +748,99 @@ export default function DocumentUploadApp() {
         </CardHeader>
 
         <CardContent className="p-8">
-          {!isUploading && !isProcessing && !isProcessingKyc && !extractedData && !kycResult && (
-            <div className="space-y-8">
-              <div
-                className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-300 ${
-                  isDragOver
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-300 hover:border-blue-500"
-                } cursor-pointer`}
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <Upload
-                  className={`mx-auto h-16 w-16 ${
-                    isDragOver ? "text-blue-500" : "text-gray-400"
-                  } transition-colors`}
-                />
-                <h3 className="mt-4 text-xl font-semibold text-gray-900">
-                  {isDragOver ? "Drop Files Here" : "Upload Documents"}
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Drag and drop your PDF files or click to browse
-                </p>
-                <p className="mt-2 text-xs text-gray-400">
-                  Only PDF files supported (Max 10MB each)
-                </p>
-                <input
-                  ref={fileInputRef}
-                  id="file-upload"
-                  name="file-upload"
-                  type="file"
-                  multiple
-                  accept=".pdf"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </div>
-
-              {files.length > 0 && (
-                <div className="mt-6">
-                  <h4 className="font-semibold text-gray-700 mb-4">
-                    Selected Files ({files.length})
-                  </h4>
-                  <div className="space-y-3">
-                    {files.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition"
-                      >
-                        <FileText className="h-6 w-6 text-blue-500 mr-3" />
-                        <span className="text-sm text-gray-600 flex-1">
-                          {file.name}
-                        </span>
-                        <span className="text-xs text-gray-500 mr-3">
-                          {(file.size / 1024).toFixed(0)} KB
-                        </span>
-                        <button
-                          onClick={() => handleRemoveFile(index)}
-                          className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+          {!isUploading &&
+            !isProcessing &&
+            !isProcessingKyc &&
+            !extractedData &&
+            !kycResult && (
+              <div className="space-y-8">
+                <div
+                  className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-300 ${
+                    isDragOver
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-300 hover:border-blue-500"
+                  } cursor-pointer`}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <Upload
+                    className={`mx-auto h-16 w-16 ${
+                      isDragOver ? "text-blue-500" : "text-gray-400"
+                    } transition-colors`}
+                  />
+                  <h3 className="mt-4 text-xl font-semibold text-gray-900">
+                    {isDragOver ? "Drop Files Here" : "Upload Documents"}
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Drag and drop your PDF files or click to browse
+                  </p>
+                  <p className="mt-2 text-xs text-gray-400">
+                    Only PDF files supported (Max 10MB each)
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    id="file-upload"
+                    name="file-upload"
+                    type="file"
+                    multiple
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
                 </div>
-              )}
 
-              {error && (
-                <Alert variant="destructive" className="mt-4">
-                  <AlertCircle className="h-5 w-5" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-            </div>
-          )}
+                {files.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-semibold text-gray-700 mb-4">
+                      Selected Files ({files.length})
+                    </h4>
+                    <div className="space-y-3">
+                      {files.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition"
+                        >
+                          <FileText className="h-6 w-6 text-blue-500 mr-3" />
+                          <span className="text-sm text-gray-600 flex-1">
+                            {file.name}
+                          </span>
+                          <span className="text-xs text-gray-500 mr-3">
+                            {(file.size / 1024).toFixed(0)} KB
+                          </span>
+                          <button
+                            onClick={() => handleRemoveFile(index)}
+                            className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-        
+                {error && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertCircle className="h-5 w-5" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
 
           {(isUploading || isProcessing || isProcessingKyc) && (
             <div className="py-16 space-y-8 text-center">
@@ -878,7 +905,8 @@ export default function DocumentUploadApp() {
                             <span className="font-medium text-gray-600 w-40 capitalize">
                               {key
                                 .replace(/([A-Z])/g, " $1")
-                                .replace(/^./, (str) => str.toUpperCase())}:
+                                .replace(/^./, (str) => str.toUpperCase())}
+                              :
                             </span>
                             <span
                               className={`font-semibold ${
@@ -912,9 +940,9 @@ export default function DocumentUploadApp() {
                     Ready for KYC Processing
                   </AlertTitle>
                   <AlertDescription className="text-blue-700">
-                    Documents have been extracted successfully. Click "Process KYC"
-                    to perform fraud detection, risk assessment, and compliance
-                    checks.
+                    Documents have been extracted successfully. Click "Process
+                    KYC" to perform fraud detection, risk assessment, and
+                    compliance checks.
                   </AlertDescription>
                 </Alert>
               </div>
