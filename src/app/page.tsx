@@ -1,5 +1,6 @@
 "use client";
 import type { JSX } from "react";
+import React from "react";
 import {
   Upload,
   FileText,
@@ -19,8 +20,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useState } from "react";
+import { useRef } from "react";
 
-// Generic Document interface
 interface DocumentData {
   [key: string]: string | number | boolean | DocumentData | null;
 }
