@@ -435,13 +435,12 @@ export default function DocumentUploadApp() {
               ? value
                 ? "Yes"
                 : "No"
-              : value || "N/A"}
+              : String(value || "N/A")}
           </span>
         </div>
       );
     });
   };
-
   // Render the KYC result data with enhanced UI
   const renderKycResult = () => {
     if (!kycResult) return null; // Fixed: removed "admin" prefix from kycResult
