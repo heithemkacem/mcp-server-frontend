@@ -140,7 +140,7 @@ export default function DocumentUploadApp() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://127.0.0.1:5000/upload", {
+      const response = await fetch("http://10.208.80.233:5000/upload", {
         method: "POST",
         body: formData,
       });
@@ -200,7 +200,7 @@ export default function DocumentUploadApp() {
       }, 500);
 
       const processResponse = await fetch(
-        "http://127.0.0.1:5000/process_docs",
+        "http://10.208.80.233:5000/process_docs",
         {
           method: "POST",
           headers: {
@@ -304,7 +304,7 @@ export default function DocumentUploadApp() {
         });
       }, 500);
 
-      const kycResponse = await fetch("http://127.0.0.1:5000/process_kyc", {
+      const kycResponse = await fetch("http://10.208.80.233:5000/process_kyc", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
