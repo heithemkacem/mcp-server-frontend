@@ -20,8 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useState } from "react";
-import { useRef } from "react";
+import { useState, useRef } from "react";
 
 interface DocumentData {
   [key: string]: string | number | boolean | DocumentData | null;
@@ -80,11 +79,12 @@ export default function DocumentUploadApp() {
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
-  const [showJson, setShowJson] = useState<any>({}); // Track JSON visibility per document
+  const [showJson, setShowJson] = useState<any>({});
   const [isProcessingKyc, setIsProcessingKyc] = useState<boolean>(false);
   const [processingStep, setProcessingStep] = useState<string>("upload");
 
-  // Handle file selection via input element
+  const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".txt"];
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) {
       const newFiles = Array.from(e.target.files);
@@ -92,28 +92,30 @@ export default function DocumentUploadApp() {
     }
   };
 
-  // Handle files from both drag-and-drop and file input
   const addFiles = (newFiles: File[]) => {
     const currentFilenames = files.map((f) => f.name);
     const uniqueNewFiles = newFiles.filter(
       (file) => !currentFilenames.includes(file.name)
     );
-    const pdfFiles = uniqueNewFiles.filter((file) =>
-      file.name.toLowerCase().endsWith(".pdf")
-    );
 
-    if (pdfFiles.length < uniqueNewFiles.length) {
-      setError("Only PDF files are supported. Some files were filtered out.");
+    const validFiles = uniqueNewFiles.filter((file) => {
+      const lowerName = file.name.toLowerCase();
+      return allowedExtensions.some((ext) => lowerName.endsWith(ext));
+    });
+
+    if (validFiles.length < uniqueNewFiles.length) {
+      setError(
+        "Only PDF, JPG, JPEG, PNG, and TXT files are supported. Some files were filtered out."
+      );
     }
 
-    setFiles((prevFiles) => [...prevFiles, ...pdfFiles]);
+    setFiles((prevFiles) => [...prevFiles, ...validFiles]);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  // Handle drag events
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(true);
@@ -134,7 +136,6 @@ export default function DocumentUploadApp() {
     }
   };
 
-  // Upload a single file to the server
   const uploadSingleFile = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append("file", file);
@@ -159,10 +160,9 @@ export default function DocumentUploadApp() {
     }
   };
 
-  // Handle file uploads one by one
   const handleUpload = async () => {
     if (files.length === 0) {
-      setError("Please select at least one PDF file to upload");
+      setError("Please select at least one file to upload");
       return;
     }
 
@@ -203,12 +203,8 @@ export default function DocumentUploadApp() {
         "http://10.208.80.233:5000/process_docs",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            list_of_doc: uploadedFileNames,
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ list_of_doc: uploadedFileNames }),
         }
       );
 
@@ -222,7 +218,6 @@ export default function DocumentUploadApp() {
       setProgress(100);
       setIsProcessing(false);
 
-      // Parse the JSON strings in the data array
       const parsedDocuments = processResult.data.map(
         (jsonString: string, index: number) => {
           let parsedData;
@@ -237,12 +232,12 @@ export default function DocumentUploadApp() {
             parsedData = JSON.parse(fixedJsonString);
           } catch (e) {
             console.error("Failed to parse JSON:", jsonString);
-            parsedData = { raw_data: jsonString }; // Store raw string if parsing fails
+            parsedData = { raw_data: jsonString };
           }
 
           const doc: Document = {
             filename: files[index]?.name || `Document ${index + 1}`,
-            type: "PDF",
+            type: "File",
             data: parsedData,
           };
 
@@ -250,7 +245,6 @@ export default function DocumentUploadApp() {
         }
       );
 
-      // Simplified verification summary
       const formattedData: ExtractedData = {
         documents: parsedDocuments,
         verificationSummary: {
@@ -266,14 +260,13 @@ export default function DocumentUploadApp() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to upload or process files. Please try again."
+          : "Failed to upload or process files."
       );
       setIsUploading(false);
       setIsProcessing(false);
     }
   };
 
-  // Process KYC using the extracted data
   const processKYC = async () => {
     if (!extractedData) {
       setError("No document data to process");
@@ -306,9 +299,7 @@ export default function DocumentUploadApp() {
 
       const kycResponse = await fetch("http://10.208.80.233:5000/process_kyc", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(combinedData),
       });
 
@@ -329,23 +320,19 @@ export default function DocumentUploadApp() {
     } catch (err) {
       console.error("KYC processing error:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to process KYC data. Please try again."
+        err instanceof Error ? err.message : "Failed to process KYC data."
       );
     } finally {
       setIsProcessingKyc(false);
     }
   };
 
-  // Remove a single file from the selection
   const handleRemoveFile = (indexToRemove: number) => {
     setFiles((prevFiles) =>
       prevFiles.filter((_, index) => index !== indexToRemove)
     );
   };
 
-  // Reset everything to upload more files
   const handleReset = () => {
     setFiles([]);
     setExtractedData(null);
@@ -357,7 +344,6 @@ export default function DocumentUploadApp() {
     setProcessingStep("upload");
   };
 
-  // Generate KYC report
   const handleGenerateReport = () => {
     if (kycResult) {
       alert("KYC Report generated and ready for download!");
@@ -366,12 +352,10 @@ export default function DocumentUploadApp() {
     }
   };
 
-  // Toggle JSON visibility for a document
   const toggleJson = (index: number | string) => {
     setShowJson((prev: any) => ({ ...prev, [index]: !prev[index] }));
   };
 
-  // Render raw JSON for a document
   const renderRawJson = (doc: Document, index: number) => {
     const jsonString = JSON.stringify(doc.data, null, 2);
     return (
@@ -393,7 +377,6 @@ export default function DocumentUploadApp() {
     );
   };
 
-  // Utility function to render nested data
   const renderNestedData = (data: any, prefix: string = ""): JSX.Element[] => {
     if (typeof data !== "object" || data === null || Array.isArray(data)) {
       return [
@@ -441,6 +424,7 @@ export default function DocumentUploadApp() {
       );
     });
   };
+
   // Render the KYC result data with enhanced UI
   const renderKycResult = () => {
     if (!kycResult) return null; // Fixed: removed "admin" prefix from kycResult
@@ -775,10 +759,10 @@ export default function DocumentUploadApp() {
                     {isDragOver ? "Drop Files Here" : "Upload Documents"}
                   </h3>
                   <p className="mt-2 text-sm text-gray-500">
-                    Drag and drop your PDF files or click to browse
+                    Drag and drop your PDF/Images/Text files or click to browse
                   </p>
                   <p className="mt-2 text-xs text-gray-400">
-                    Only PDF files supported (Max 10MB each)
+                    Only PDF/TXT/IMAGES files supported (Max 10MB each)
                   </p>
                   <input
                     ref={fileInputRef}
